@@ -1,0 +1,10 @@
+google-genai>=1.0.0
+SpeechRecognition>=3.10.0
+pyttsx3>=2.90
+python-dotenv>=1.0.0
+# PyAudio est nécessaire pour le microphone avec SpeechRecognition.
+# Sous Windows, en cas d'erreur: py -m pip install pipwin && pipwin install pyaudio
+PyAudio
+speechbrain 
+torch==2.11.0
+torchaudio==2.11.0
