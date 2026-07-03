@@ -1,0 +1,17 @@
+[Unit]
+Description=Yollande voice assistant
+After=graphical-session.target sound.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/yollande
+Environment=ASSISTANT_REQUIRE_WAKE_WORD=1
+Environment=ASSISTANT_AUTO_LISTEN=1
+Environment=ASSISTANT_START_MINIMIZED=1
+ExecStart=/usr/bin/python3 /opt/yollande/run_assistant.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
