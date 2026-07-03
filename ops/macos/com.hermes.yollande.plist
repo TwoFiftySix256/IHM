@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hermes.yollande</string>
+  <key>WorkingDirectory</key>
+  <string>/Applications/Yollande</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Applications/Yollande/run_assistant.py</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ASSISTANT_REQUIRE_WAKE_WORD</key>
+    <string>1</string>
+    <key>ASSISTANT_AUTO_LISTEN</key>
+    <string>1</string>
+    <key>ASSISTANT_START_MINIMIZED</key>
+    <string>1</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+</dict>
+</plist>
