@@ -1,0 +1,319 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usepackage{hyperref}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{enumitem}
+
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, calc}
+
+\geometry{margin=2.5cm}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  citecolor=blue
+}
+
+\title{
+  \textbf{Yollande : Assistante Vocale Personnalisée pour Interaction Homme-Machine}\\
+  \large Rapport Technique de Fin de Projet
+}
+\author{Ingénieur Hermes Mbizi}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Ce rapport présente la conception et la réalisation de Yollande, une assistante vocale
+personnalisée développée dans le cadre du cours d'Interface Homme-Machine (IHM).
+Le projet vise à réduire l'effet robotique des assistants classiques en améliorant la
+fluidité conversationnelle, la personnalisation, la gestion de la latence et
+l'automatisation du lancement de l'application sur un poste de travail.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+\chapter{Introduction et Contexte}
+
+Les assistants vocaux sont devenus des interfaces privilégiées pour simplifier
+l'interaction entre un utilisateur et un système informatique. Cependant, leur
+utilisation reste souvent freinée par un effet perçu comme robotique : réponses
+trop rigides, latence trop visible, absence de personnalisation, mauvaise gestion
+des interruptions et manque de continuité dans l'échange.
+
+Dans le cadre du cours d'Interface Homme-Machine (IHM), ce projet propose une
+assistante vocale nommée \textbf{Yollande}. Elle est conçue pour accompagner
+l'Ingénieur Hermes Mbizi dans des tâches quotidiennes, notamment l'enregistrement
+de rappels, la consultation de tâches, les annonces vocales et le lancement
+automatique de l'application au démarrage du poste.
+
+Le problème central n'est pas uniquement technique. Il concerne aussi la qualité
+de l'expérience utilisateur : l'assistant doit réagir rapidement, parler de manière
+naturelle, reconnaître son utilisateur, et éviter d'imposer une interface lourde.
+L'enjeu IHM est donc de construire une interaction vocale qui ressemble davantage
+à un dialogue avec un collègue de bureau qu'à une suite de commandes mécaniques.
+
+\chapter{Objectifs du Projet}
+
+Les objectifs principaux du projet sont les suivants :
+
+\begin{itemize}[label=--]
+  \item reconnaître le nom d'activation \textit{Yollande} avant de traiter une commande ;
+  \item personnaliser l'échange pour l'Ingénieur Hermes Mbizi ;
+  \item enregistrer, consulter, modifier et rappeler des tâches localement ;
+  \item assurer que l'enregistrement des tâches et les rappels fonctionnent en mode offline ;
+  \item réduire la latence entre la question de l'utilisateur et la réponse de l'assistante ;
+  \item rendre les réponses vocales plus humaines grâce à des formulations variées ;
+  \item permettre l'interruption de la parole de l'assistante lorsque l'utilisateur reprend la parole ;
+  \item automatiser le lancement de l'application au démarrage de la machine ou via une icône ;
+  \item fournir une base extensible pour intégrer ultérieurement une reconnaissance vocale totalement offline.
+\end{itemize}
+
+\chapter{Architecture Générale}
+
+\section{Schéma d'architecture}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    node distance=1.2cm and 1.4cm,
+    block/.style={rectangle, rounded corners, draw=black, fill=blue!8, minimum width=3.2cm, minimum height=1cm, align=center},
+    local/.style={rectangle, rounded corners, draw=black, fill=green!10, minimum width=3.4cm, minimum height=1cm, align=center},
+    external/.style={rectangle, rounded corners, draw=black, fill=orange!12, minimum width=3.4cm, minimum height=1cm, align=center},
+    data/.style={cylinder, shape border rotate=90, draw=black, fill=gray!12, minimum height=1cm, minimum width=1.5cm, align=center},
+    arrow/.style={-{Latex[length=3mm]}, thick}
+  ]
+
+    \node[block] (user) {Utilisateur\\Ingénieur Hermes Mbizi};
+    \node[block, right=of user] (mic) {Capture audio\\Microphone};
+    \node[block, right=of mic] (stt) {Speech-to-Text\\Reconnaissance vocale};
+    \node[local, below=of stt] (wake) {Wake Word Detection\\Yollande / Yolande / Hollande};
+    \node[local, right=of wake] (parser) {Parseur local\\Commandes de tâches};
+    \node[external, above=of parser] (llm) {LLM optionnel\\Gemini si Internet disponible};
+    \node[local, right=of parser] (router) {Routeur de commandes\\Dialogue et confirmations};
+    \node[data, below=of router] (json) {Stockage JSON\\local};
+    \node[local, right=of router] (scheduler) {Scheduler local\\Rappels anticipés et principaux};
+    \node[block, above=of scheduler] (tts) {Text-to-Speech\\Voix Yollande};
+    \node[block, right=of tts] (speaker) {Sortie vocale\\Haut-parleurs};
+    \node[block, below=of scheduler] (os) {Actions système\\lancement, fichiers, dossiers};
+
+    \draw[arrow] (user) -- (mic);
+    \draw[arrow] (mic) -- (stt);
+    \draw[arrow] (stt) -- (wake);
+    \draw[arrow] (wake) -- (parser);
+    \draw[arrow] (parser) -- (router);
+    \draw[arrow] (stt) |- (llm);
+    \draw[arrow] (llm) -- (router);
+    \draw[arrow] (router) -- (json);
+    \draw[arrow] (json) -- (scheduler);
+    \draw[arrow] (scheduler) -- (tts);
+    \draw[arrow] (router) -- (tts);
+    \draw[arrow] (tts) -- (speaker);
+    \draw[arrow] (router) -- (os);
+
+  \end{tikzpicture}
+  \caption{Architecture fonctionnelle de l'assistante vocale Yollande.}
+  \label{fig:architecture-yollande}
+\end{figure}
+
+\section{Description des flux de données}
+
+Le flux principal commence par la parole de l'utilisateur. Le microphone capture
+le signal audio, puis le module de reconnaissance vocale transforme ce signal en
+texte. Ce texte est ensuite filtré par le module de détection du mot d'activation.
+Yollande ne traite la demande que si son nom est détecté ou si une conversation
+est déjà ouverte.
+
+Après activation, la phrase est transmise à la couche d'analyse. Les commandes
+simples et critiques, comme l'ajout d'une tâche, la liste des tâches, la
+suppression ou la validation, sont traitées localement par un parseur à règles.
+Ce choix garantit que les fonctions de base restent disponibles hors ligne. Le
+LLM externe, lorsqu'il est activé, joue uniquement un rôle complémentaire pour
+les formulations plus libres.
+
+Le routeur de commandes orchestre ensuite l'action : il crée une tâche, demande
+une confirmation, lance une action système ou transmet un message vocal. Les
+tâches sont persistées dans un fichier JSON local, ce qui supprime toute
+dépendance à un service distant pour l'enregistrement et la consultation.
+
+Le scheduler de rappels fonctionne en arrière-plan. Il lit les tâches locales,
+compare leur échéance à l'heure courante et déclenche deux types d'alertes :
+un rappel anticipé et un rappel principal. Le message est ensuite envoyé au
+module de synthèse vocale pour être annoncé à l'utilisateur.
+
+\chapter{Technologies Utilisées}
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{p{4cm} p{9cm}}
+    \toprule
+    \textbf{Technologie} & \textbf{Rôle dans le projet} \\
+    \midrule
+    Python & Langage principal de l'application, choisi pour sa simplicité, son écosystème audio et sa rapidité de prototypage. \\
+    Tkinter & Interface graphique légère permettant d'afficher les tâches, de tester le micro et de contrôler l'écoute continue. \\
+    SpeechRecognition & Interface de reconnaissance vocale utilisée dans le prototype. \\
+    pyttsx3 / SAPI Windows & Synthèse vocale locale ou native permettant de faire parler Yollande. \\
+    JSON & Persistance locale des tâches, sans base de données externe. \\
+    Gemini & LLM optionnel utilisé lorsque l'accès Internet est disponible. Les commandes de tâches restent traitées localement. \\
+    PowerShell / Task Scheduler & Automatisation du lancement sous Windows. \\
+    systemd / Launchd & Modèles de lancement automatique pour Linux et macOS. \\
+    \bottomrule
+  \end{tabular}
+  \caption{Technologies utilisées dans le projet.}
+\end{table}
+
+\chapter{Fonctionnement Offline des Tâches et Rappels}
+
+L'enregistrement des tâches et les rappels ont été conçus pour fonctionner sans
+connexion Internet. Trois composants assurent cette autonomie :
+
+\begin{itemize}[label=--]
+  \item \textbf{Parseur local} : les commandes comme \og rappelle-moi de ... à ... \fg{},
+  \og liste mes tâches \fg{} ou \og supprime la tâche \fg{} sont détectées par règles.
+  \item \textbf{Stockage JSON local} : les tâches sont enregistrées dans un fichier local,
+  généralement dans le dossier de données de l'utilisateur.
+  \item \textbf{Scheduler local} : un thread vérifie périodiquement les échéances et déclenche
+  les rappels sans service distant.
+\end{itemize}
+
+Le mode \texttt{ASSISTANT\_OFFLINE\_MODE=1} désactive explicitement l'usage de
+Gemini. Dans ce mode, les fonctions essentielles de tâches restent disponibles.
+La reconnaissance vocale totalement offline nécessiterait toutefois un moteur
+local spécialisé, comme Vosk ou Whisper local, car le module SpeechRecognition
+peut utiliser un service Web selon le backend sélectionné.
+
+\chapter{Justification du Speech Analysis}
+
+L'analyse de la parole est indispensable pour dépasser l'effet robotique. Dans
+une interaction humaine, la communication ne se limite pas aux mots : elle
+repose aussi sur les pauses, le rythme, les interruptions et les marqueurs de
+discours.
+
+\section{Détection des silences}
+
+La détection des silences permet de déterminer quand l'utilisateur a terminé de
+parler. Un seuil trop long crée une latence désagréable ; un seuil trop court
+coupe la phrase avant sa fin. Le projet ajuste donc le temps de pause afin de
+réduire l'attente tout en gardant une reconnaissance acceptable.
+
+\section{Gestion des interruptions}
+
+Un assistant naturel doit pouvoir s'arrêter lorsque l'utilisateur reprend la
+parole. Le projet prévoit une interruption de la synthèse vocale en cours dès
+qu'une nouvelle phrase utilisateur est détectée. Cette capacité rapproche le
+système d'un dialogue réel.
+
+\section{Marqueurs de discours humains}
+
+Les formulations de Yollande utilisent des expressions naturelles comme
+\og Au fait \fg{}, \og petite parenthèse \fg{} ou \og je vous préviens un peu
+à l'avance \fg{}. Ces marqueurs masquent les micro-latences et évitent les
+annonces trop mécaniques.
+
+\chapter{Captures d'Écran et Logs}
+
+% Remplacer les noms de fichiers ci-dessous par vos propres captures.
+
+\begin{figure}[H]
+  \centering
+  % Exemple :
+  % \includegraphics[width=0.85\textwidth]{images/interface_yollande.png}
+  \fbox{\parbox{0.85\textwidth}{\centering Placeholder : capture de l'interface Tkinter de Yollande}}
+  \caption{Interface principale de Yollande.}
+  \label{fig:interface}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  % Exemple :
+  % \includegraphics[width=0.85\textwidth]{images/logs_rappel.png}
+  \fbox{\parbox{0.85\textwidth}{\centering Placeholder : logs de création de tâche et de rappel}}
+  \caption{Exemple de logs liés aux tâches et rappels.}
+  \label{fig:logs}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  % Exemple :
+  % \includegraphics[width=0.85\textwidth]{images/raccourci_bureau.png}
+  \fbox{\parbox{0.85\textwidth}{\centering Placeholder : raccourci bureau ou tâche planifiée Windows}}
+  \caption{Automatisation du lancement au démarrage ou via icône.}
+  \label{fig:deploiement}
+\end{figure}
+
+\chapter{Difficultés Rencontrées}
+
+\section{Gestion de la latence}
+
+La latence provient principalement de trois sources : l'écoute audio, la
+reconnaissance vocale et la synthèse de la réponse. Le projet a réduit cette
+latence en diminuant la durée de calibration du bruit ambiant, en réduisant le
+seuil de silence et en lançant la synthèse vocale en arrière-plan.
+
+\section{Faux positifs sur le mot de réveil}
+
+Le mot \textit{Yollande} peut être transcrit différemment par le moteur vocal :
+\textit{Yolande}, \textit{Hollande} ou \textit{yo lande}. Le système accepte
+plusieurs variantes afin de limiter les échecs d'activation.
+
+\section{Interruptions en temps réel}
+
+Interrompre une voix synthétique est techniquement plus complexe que simplement
+lancer une lecture audio. Le projet garde une référence au processus de synthèse
+ou au moteur vocal afin de pouvoir l'arrêter lorsque l'utilisateur reprend la
+parole.
+
+\section{Déploiement sans terminal}
+
+Une difficulté supplémentaire concerne le lancement automatique. Sous Windows,
+le système utilise un script PowerShell et le Planificateur de tâches. Sous
+Linux et macOS, des modèles systemd et Launchd sont proposés.
+
+\chapter{Limites et Améliorations Possibles}
+
+Les principales limites actuelles sont les suivantes :
+
+\begin{itemize}[label=--]
+  \item la reconnaissance vocale du prototype peut encore dépendre d'un service Web ;
+  \item la détection d'interruption reste approximative et dépend du temps de reconnaissance ;
+  \item l'interface graphique est fonctionnelle mais minimaliste ;
+  \item la sécurité des actions système peut être renforcée par des profils utilisateur ;
+  \item le moteur local de compréhension peut être enrichi pour davantage de formulations.
+\end{itemize}
+
+Les améliorations possibles incluent :
+
+\begin{itemize}[label=--]
+  \item intégrer un moteur STT offline comme Vosk ou Whisper local ;
+  \item ajouter une vraie détection locale du wake word au niveau audio ;
+  \item créer une interface plus moderne avec un statut audio visuel ;
+  \item ajouter un historique conversationnel local ;
+  \item produire un exécutable installable pour Windows ;
+  \item ajouter des tests d'intégration automatisés pour les rappels.
+\end{itemize}
+
+\chapter{Conclusion}
+
+Le projet Yollande montre qu'un assistant vocal peut être conçu comme une
+interface homme-machine plus naturelle, plus personnalisée et plus autonome.
+Les choix d'architecture privilégient la robustesse locale pour les fonctions
+essentielles, notamment l'enregistrement des tâches et les rappels offline.
+L'automatisation du lancement et la réduction de la latence participent à une
+expérience plus fluide, adaptée à un usage quotidien.
+
+\end{document}
